@@ -1,43 +1,33 @@
-def print_output(departments: dict) -> None:
-    dept_score_index = {
-        "Biotech": 2,
-        "Chemistry": 2,
-        "Engineering": 4,
-        "Mathematics": 3,
-        "Physics": 1
-    }
+DEPT_SCORE_INDEX = {
+    "Biotech": 2,
+    "Chemistry": 2,
+    "Engineering": 4,
+    "Mathematics": 3,
+    "Physics": 1
+}
+
+
+def print_output(departments: dict, to_file=False, filename="admitted.txt") -> None:
+    target = open(filename, "w", encoding="utf-8") if to_file else None
+
     for dept in sorted(departments.keys()):
-        score_index = dept_score_index.get(dept)
-        print(dept)
+        score_index = DEPT_SCORE_INDEX.get(dept)
+        line = dept
+        print(line)
+        if target: target.write(line + "\n")
+
         for applicant in departments[dept]:
-            print(f"{applicant[0]} {applicant[score_index]:.2f}")
+            line = f"{applicant[0]} {applicant[score_index]:.2f}"
+            print(line)
+            if target: target.write(line + "\n")
+
         print()
+        if target: target.write("\n")
+
+    if target: target.close()
 
 
-def print_output_to_file(departments: dict):
-    dept_score_index = {
-        "Biotech": 2,
-        "Chemistry": 2,
-        "Engineering": 4,
-        "Mathematics": 3,
-        "Physics": 1
-    }
-    with open("admitted.txt", "w", encoding="utf-8") as fd:
-        for dept in sorted(departments.keys()):
-            score_index = dept_score_index.get(dept)
-            fd.write(dept + "\n")
-            for applicant in departments[dept]:
-                line = f"{applicant[0]} {applicant[score_index]:.2f}"
-                fd.write(line + "\n")
-            fd.write("\n")
-
-
-def sort_by_gpa(applicants: list) -> list:  # calculate Grade Point Average
-    sorted_by_gpa = sorted(applicants, key=lambda x: (-x[1], x[0]))
-    return sorted_by_gpa
-
-
-def process_file() -> list:
+def process_file(filename: str) -> list:
     """
     Process "applicant_list.txt" file,
     example: "John Ritchie 89 45 83 75 Physics Engineering Mathematics"
@@ -45,23 +35,17 @@ def process_file() -> list:
              [2,3,4,5] physics_score, chemistry_score, math_score, computer_science_score,
              [6,7,8] priority_a, priority_b, priority_c
     """
-    applicants = []
     # Read the applicants.txt file, example: "John Ritchie 89 45 83 75 Physics Engineering Mathematics"
-    with open("applicant_list_5.txt", "r", encoding="utf-8") as fd:
-        lines = fd.readlines()
-        for line in lines:
-            line_ = line.strip().split(' ')
-            name = " ".join(line_[0:2])
-            exam1 = float(line_[2])
-            exam2 = float(line_[3])
-            exam3 = float(line_[4])
-            exam4 = float(line_[5])
-            priority_a = line_[6]
-            priority_b = line_[7]
-            priority_c = line_[8]
-            applicants.append([name, exam1, exam2, exam3, exam4, priority_a, priority_b, priority_c])
+    with open(filename, "r", encoding="utf-8") as fd:
+        return [
+            [" ".join(parts[0:2])] + list(map(float, parts[2:6])) + parts[6:9]
+            for line in fd
+            if (parts := line.strip().split())
+        ]
 
-    return applicants
+
+def sort_applicants_by_score(applicants: list, score_index: int) -> list:
+    return sorted(applicants, key=lambda x: (-x[score_index], x[0]))
 
 
 def sort_by_department(applicants: list, departments: dict, n: int) -> dict | None:
@@ -75,17 +59,16 @@ def sort_by_department(applicants: list, departments: dict, n: int) -> dict | No
     admitted = set()
 
     # Round indices for priority departments
-    priorities = [5, 6, 7] # first, second, third priority
-    dept_score_index = {
-        "Biotech": 2,
-        "Chemistry": 2,
-        "Engineering": 4,
-        "Mathematics": 3,
-        "Physics": 1
-    }
+    priorities = [5, 6, 7]  # first, second, third priority
 
     for priority in priorities:
         for dept in departments:
+            # Set correct score to a department for sorting
+            score_index = DEPT_SCORE_INDEX.get(dept)
+            if score_index is None:
+                print(f"Error: unknown score index for department {dept}")
+                continue
+
             # Only consider applicants who are not admitted yet
             eligible = [
                 applicant for applicant in applicants
@@ -96,26 +79,15 @@ def sort_by_department(applicants: list, departments: dict, n: int) -> dict | No
             # for a in eligible:
             #     print(f"{a[0]} - {a[score_index]:.2f} - Round {priority - 4} for {dept}")
 
-            # Set correct score to a department for sorting
-            score_index = dept_score_index.get(dept)
-            if score_index is None:
-                print("Error: score index unknown.")
+            selected = sort_applicants_by_score(eligible, score_index)[:n - len(departments[dept])]
 
-            # Sort by score (descending), if equal then by name (ascending)
-            eligible.sort(key=lambda e: (-e[score_index], e[0]))
-
-            # Calculate remaining seats for department
-            seats_left = n - len(departments[dept])
-            selected = eligible[:seats_left]
-
-            # Add selected to department and mark as admitted
             departments[dept].extend(selected)
-            admitted.update(map(tuple, selected))  # convert to tuple to make hashable
+            admitted.update(map(tuple, selected))
 
     # Re-sort each department's final list before returning
     for dept in departments:
-        score_index = dept_score_index.get(dept)
-        departments[dept].sort(key=lambda d: (-d[score_index], d[0]))
+        score_index = DEPT_SCORE_INDEX.get(dept)
+        departments[dept].sort(key=lambda a: (-a[score_index], a[0]))
 
     return departments
 
@@ -124,7 +96,7 @@ def main():
     departments = {dept: [] for dept in ["Biotech", "Chemistry", "Engineering", "Mathematics", "Physics"]}
 
     # Process "applicant_list.txt" file,
-    applicants = process_file()
+    applicants = process_file(filename="applicant_list_5.txt")
     # # Debug
     # print("Debug - unsorted applicants:")
     # for name, exam1, exam2, exam3, exam4, priority_a, priority_b, priority_c in applicants:
@@ -133,15 +105,12 @@ def main():
     # N integer representing the number of applicants allowed for department
     n = int(input())
 
-    # Sort applicants by GPA (descending), if equal then by name (ascending)
-    sorted_applicants_gpa = sort_by_gpa(applicants)
-
     # Sort list of applicant by Departments
-    departments = sort_by_department(sorted_applicants_gpa, departments, n)
+    departments = sort_by_department(applicants, departments, n)
 
     # Output result according to score
-    # print_output_to_file(departments)
-    print_output(departments)
+    # print_output(departments, to_file=True) # print output to file "admitted.txt"
+    print_output(departments) # print output
 
 
 if __name__ == '__main__':
